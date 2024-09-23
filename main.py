@@ -13,6 +13,7 @@ from PyQt6.QtCore import Qt, QSettings
 from PyQt6 import QtGui
 from PIL import Image
 from PIL.ExifTags import TAGS
+from send2trash import send2trash
 
 class ImageViewer(QMainWindow):
     def __init__(self):
@@ -40,9 +41,10 @@ class ImageViewer(QMainWindow):
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         layout = QVBoxLayout(main_widget)
-
         # 选择目录的操作框
-        dir_layout = QHBoxLayout()
+        dir_layout = QVBoxLayout()
+        jpg_dir_layout = QHBoxLayout()
+        raw_dir_layout = QHBoxLayout()
 
         # JPG后缀选择列表
         self.jpg_ext_list = QComboBox(self)
@@ -68,14 +70,30 @@ class ImageViewer(QMainWindow):
         raw_button = QPushButton("Browse RAW", self)
         raw_button.clicked.connect(self.select_raw_directory)
 
-        dir_layout.addWidget(self.jpg_ext_list)
-        dir_layout.addWidget(self.jpg_dir_input)
-        dir_layout.addWidget(jpg_button)
-        dir_layout.addWidget(self.raw_ext_list)
-        dir_layout.addWidget(self.raw_dir_input)
-        dir_layout.addWidget(raw_button)
+        self.delete_unexist_raw_btn = QPushButton("DeleteUnMatchedRaw", self)
+        self.delete_unexist_raw_btn.clicked.connect(self.delete_unmatched_raws)
+        self.delete_unexist_raw_btn.setToolTip("仅有raw，没有对应的jpg，删除raw")
+        self.delete_unexist_jpg_btn = QPushButton("DeleteUnMatchedJPG", self)
+        self.delete_unexist_jpg_btn.clicked.connect(self.delete_unmatched_jpgs)
+        self.delete_unexist_jpg_btn.setToolTip("仅有jpg，没有对应的raw，删除jpg")
 
+        jpg_dir_layout.addWidget(self.jpg_ext_list)
+        jpg_dir_layout.addWidget(self.jpg_dir_input)
+        jpg_dir_layout.addWidget(jpg_button)
+        jpg_dir_layout.addWidget(self.delete_unexist_jpg_btn)
+
+        raw_dir_layout.addWidget(self.raw_ext_list)
+        raw_dir_layout.addWidget(self.raw_dir_input)
+        raw_dir_layout.addWidget(raw_button)
+        raw_dir_layout.addWidget(self.delete_unexist_raw_btn)
+
+        dir_layout.addLayout(jpg_dir_layout)
+        dir_layout.addLayout(raw_dir_layout)
+        dir_layout.setSpacing(0)
         layout.addLayout(dir_layout)
+
+        # layout.addLayout(jpg_dir_layout)
+        # layout.addLayout(raw_dir_layout)
 
         image_splitter = QSplitter(Qt.Orientation.Horizontal)  # 使用水平分割器
         image_splitter.setMinimumWidth(150)  # 根据需要设置合适的最小宽度
@@ -142,8 +160,18 @@ class ImageViewer(QMainWindow):
         self.exif_table.setHorizontalHeaderLabels(["Property", "Value"])
         self.exif_table.setVisible(False)
 
+        delete_layout = QHBoxLayout()
         self.delete_button = QPushButton("Delete Image", self)
+        self.delete_button.setToolTip("删除当前选择的图片")
         self.delete_button.clicked.connect(self.delete_image)
+
+        self.move_to_trash_button = QPushButton("MoveToTrash", self)
+        self.move_to_trash_button.setToolTip("将所有已删除照片移到垃圾桶")
+        self.move_to_trash_button.clicked.connect(self.move_to_trash)
+
+        delete_layout.addWidget(self.delete_button)
+        delete_layout.addWidget(self.move_to_trash_button)
+
 
         # 修改布局间距
         # self.image_details_layout.setSpacing(10)  # 设置上下组件间距为5像素
@@ -154,7 +182,7 @@ class ImageViewer(QMainWindow):
         self.image_details_layout.addWidget(self.exif_label)
         self.image_details_layout.addWidget(self.toggle_exif_button)
         self.image_details_layout.addWidget(self.exif_table)
-        self.image_details_layout.addWidget(self.delete_button)
+        self.image_details_layout.addLayout(delete_layout)
         # self.image_details_layout.addStretch(1)
         image_details_widget = QWidget()
 
@@ -312,14 +340,17 @@ class ImageViewer(QMainWindow):
         exif_text = "" # "\n".join(f"{key}: {value}" for key, value in basic_info)
         for key, value in basic_info:
             if key == "ExifImageHeight":
-                exif_text += f"x{value}\n"
+                exif_text += f"x {value}\n"
             elif key == "FocalLengthIn35mmFilm":
                 exif_text += f"{value}mm "
             elif key == "FNumber":
                 exif_text += f"f/{value} "
             elif key == "ExposureTime":
-                exposureTime = 1 / value
-                exif_text += f"1/{exposureTime} "
+                if value == "N/A":
+                    exif_text += f"N/A "
+                else:
+                    exposureTime = 1 / value
+                    exif_text += f"1/{exposureTime} "
             elif key == "ISOSpeedRatings":
                 exif_text += f"ISO{value}"
             else:
@@ -379,6 +410,71 @@ class ImageViewer(QMainWindow):
             else:
                 QMessageBox.warning(self, "Error", f"{raw_filename} File does not exist.")
 
+    def delete_unmatched_raws(self):
+        if not self.jpg_dir:
+            QMessageBox.warning(self, "Error", f"jpg dir is not set")
+            pass # 警告
+
+        if not self.raw_dir:
+            QMessageBox.warning(self, "Error", f"raw dir is not set")
+            pass
+        # 获取jpg文件名（不包括扩展名）
+        jpg_files = {os.path.splitext(f)[0] for f in os.listdir(self.jpg_dir) if f.lower().endswith(self.jpg_ext_list.currentText().lower())}
+        to_be_deleted_files = []
+        matched_files_count = 0
+        # 遍历raw目录中的文件，检查是否有匹配的jpg文件
+        for raw_file in os.listdir(self.raw_dir):
+            if raw_file.lower().endswith(self.raw_ext_list.currentText().lower()):
+                raw_filename = os.path.splitext(raw_file)[0]
+                if raw_filename not in jpg_files:
+                    # 没有对应的jpg文件，将raw文件移动到deleted_dir
+                    to_be_deleted_files.append(raw_file)
+                else:
+                    matched_files_count += 1
+
+        message = f"MatchedFiles    : {matched_files_count}\n ToBeDeletedFiles: {len(to_be_deleted_files)}\n DELETE?"
+        reply = QMessageBox.question(self, 'Message',
+           message,
+           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.No:
+            return
+
+        for raw_file in to_be_deleted_files:
+            raw_path = os.path.join(self.raw_dir, raw_file)
+            shutil.move(raw_path, self.deleted_dir)
+            # print(f'Moved {raw_file} to {self.deleted_dir}')
+
+    def delete_unmatched_jpgs(self):
+        # 获取raw文件名（不包括扩展名）
+        raw_files = {os.path.splitext(f)[0] for f in os.listdir(self.raw_dir) if f.lower().endswith(self.raw_ext_list.currentText().lower())}
+        
+        to_be_deleted_files = []
+        matched_files_count = 0
+        # 遍历jpg目录中的文件，检查是否有匹配的raw文件
+        for jpg_file in os.listdir(self.jpg_dir):
+            if jpg_file.lower().endswith(self.jpg_ext_list.currentText().lower()):
+                jpg_filename = os.path.splitext(jpg_file)[0]
+                if jpg_filename not in raw_files:
+                    # 没有对应的raw文件，将jpg文件移动到deleted_dir
+                    to_be_deleted_files.append(jpg_file)
+                else:
+                    matched_files_count += 1
+
+        message = f"MatchedFiles    : {matched_files_count}\n ToBeDeletedFiles: {len(to_be_deleted_files)}\n DELETE?"
+        reply = QMessageBox.question(self, 'Message',
+           message,
+           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.No:
+            return
+
+        for jpg_file in to_be_deleted_files:
+            raw_path = os.path.join(self.jpg_dir, jpg_file)
+            shutil.move(raw_path, self.deleted_dir)
+            # print(f'Moved {jpg_file} to {self.deleted_dir}')
+
+        self.load_thumbnails()
+
+
     def on_splitter_moved(self, pos, index):
         # pos 是新位置，index 是移动的 widget 的索引
         thumbnail_size = self.thumbnail_list.size()  # 获取缩略图列表的当前尺寸
@@ -390,6 +486,19 @@ class ImageViewer(QMainWindow):
         if current:
             self.show_image(current)  # 使用当前选中的项更新图像
 
+    def move_to_trash(self):
+        normpath = os.path.normpath(self.deleted_dir)
+        message = f"DELETE {normpath} ?"
+        reply = QMessageBox.question(self, 'Message',
+           message,
+           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.No:
+            return
+
+        if os.path.exists(normpath):
+            send2trash(normpath)
+        pass
+        
     def closeEvent(self, event):
         self.jpg_dir = self.settings.setValue("jpg_dir", self.jpg_dir)
         self.raw_dir = self.settings.setValue("raw_dir", self.raw_dir)

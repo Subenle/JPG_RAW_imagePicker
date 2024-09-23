@@ -1,5 +1,5 @@
 #!/bin/bash
-exeName="jpg_raw_imagePicker.exe"
+exeName="jpg_raw_imagePicker"
 
 clean_pyinstaller() {
     rm -rf build dist *.spec
@@ -7,10 +7,15 @@ clean_pyinstaller() {
 }
 
 clean_pyinstaller
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    onefileFlag="--onefile"
+else
+   onefileFlag=""
+fi
 
-pyinstaller --onefile --noconsole --windowed \
-    --add-data "resources/weChat.JPEG;resources" \
-    --add-data "resources/icon.ico;resources" \
+pyinstaller --noconsole ${onefileFlag} --windowed \
+    --add-data "resources/weChat.JPEG:resources" \
+    --add-data "resources/icon.ico:resources" \
     --icon="resources/icon.ico" \
     --name ${exeName} \
     main.py
