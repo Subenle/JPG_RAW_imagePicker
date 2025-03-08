@@ -1,6 +1,6 @@
 # 版本发布已改至微信公众号
-因github国内访问非常不稳定，所以版本发布已转移至微信公众号
-https://mp.weixin.qq.com/s/3dPeNzT4LQCA2Ar1TKsznw
+因github国内访问非常不稳定，所以版本发布已转移至微信公众号  
+https://mp.weixin.qq.com/s/3dPeNzT4LQCA2Ar1TKsznw  
 关注公众号：Bi叔，发送 imagePicker，即可获得软件下载链接
 
 # JPG_RAW_imagePicker
