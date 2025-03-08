@@ -1,3 +1,8 @@
+# 版本发布已改至微信公众号
+因github国内访问非常不稳定，所以版本发布已转移至微信公众号
+https://mp.weixin.qq.com/s/3dPeNzT4LQCA2Ar1TKsznw
+关注公众号：Bi叔，发送 imagePicker，即可获得软件下载链接
+
 # JPG_RAW_imagePicker
 很多摄影师会同时拍摄raw+jpg两种格式的图片，筛选废片时一般用jpg进行预览，删除jpg时希望也能同时删除对应的raw文件。  
 另外，对于双内存卡的摄影师，可能存在删除了jpg，但对应的raw没有删除，或者删除了raw，但对应的jpg没有删除。  
